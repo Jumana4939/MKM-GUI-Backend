@@ -6,15 +6,19 @@ import requests
 app = Flask(__name__)
 CORS(app)
 
+# Constants
+ITEMS_PER_PAGE = 50
+
 # Function to connect to the SQLite database
 def connect_db():
     conn = sqlite3.connect('./reactionDB.db')
     return conn
 
-def query_catalysisHub_data(reactants, products, surfaces, facets):
+def query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor=None):
+    after_clause = f', after: "{after_cursor}"' if after_cursor else ''
     query = f'''
     query {{
-      reactions(first: 100, surfaceComposition:"{surfaces}", facet:"~{facets}", reactants: "{reactants}", products: "{products}") {{
+      reactions(first: 50, surfaceComposition:"{surfaces}", facet:"~{facets}", reactants: "{reactants}", products: "{products}"{after_clause}) {{
         totalCount
         pageInfo {{
           hasNextPage
@@ -49,19 +53,14 @@ def query_catalysisHub_data(reactants, products, surfaces, facets):
     '''
 
     response = requests.post('https://api.catalysis-hub.org/graphql', json={'query': query})
-    print("response: ",response)
     if response.status_code == 200:
         # Extract the dictionaries inside each "node" object
-        return [edge['node'] for edge in response.json()['data']['reactions']['edges']]
+        data = response.json()['data']['reactions']
+        return [edge['node'] for edge in data['edges']], data['pageInfo']['endCursor'], data['pageInfo']['hasNextPage']
     else:
-        return []
+        return [], None, False
     
 def query_total_count(reactants, products, surfaces, facets):
-    print("reactants", reactants)
-    print("products", products)
-    print("surfaces", surfaces)
-    print("facets", facets)
-
     query = f'''
     query {{
       reactions(first: 100, surfaceComposition:"{surfaces}", facet:"~{facets}", reactants: "{reactants}", products: "{products}") {{
@@ -105,29 +104,6 @@ def query_total_count(reactants, products, surfaces, facets):
         return 0
 
 
-# API endpoint to fetch data from the database
-@app.route('/data', methods=['GET'])
-def get_data():
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM reaction')
-    rows = cursor.fetchall()
-
-
-    # Get column names
-    cursor.execute(f'PRAGMA table_info(reaction)')
-    columns = [col[1] for col in cursor.fetchall()]
-    conn.close()
-
-    # Convert rows to list of dictionaries
-    data = []
-    for row in rows:
-        data.append(dict(zip(columns, row)))
-
-    #return jsonify(data)
-    return jsonify(data)
-
-
 # API endpoint to query data from the database
 @app.route('/query', methods=['GET'])
 def query_data():
@@ -136,34 +112,22 @@ def query_data():
     products = request.args.get('products') or "~"
     surfaces = request.args.get('surfaces') or "~"
     facets = request.args.get('facets') or ""
-
-    conn = connect_db()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM reaction WHERE reactants = ? AND products = ? AND surfaceComposition = ? AND facet = ?', (reactants, products, surfaces, facets))
-    rows = cursor.fetchall()
+    page = int(request.args.get('page', 1))
 
 
-    # Get column names
-    cursor.execute(f'PRAGMA table_info(reaction)')
-    columns = [col[1] for col in cursor.fetchall()]
-    conn.close()
-
-    # Convert rows to list of dictionaries
-    data = []
-    for row in rows:
-        data.append(dict(zip(columns, row)))
-
-    print(reactants, products, surfaces, facets)
     # Fetch data from Catalysis Hub API
-    catalysis_hub_data = query_catalysisHub_data(reactants, products, surfaces, facets)
-    
-    #print("fetched data: ", data)
-    #print("catalysisHub Data", catalysis_hub_data)
-    #return jsonify(data)
-    return jsonify(catalysis_hub_data)
+    after_cursor = None
+    if page > 1:
+        for _ in range(page - 1):
+            _, after_cursor, has_next_page = query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor)
+            if not has_next_page:
+                return jsonify([])  # No more data
 
-    ##print("fetched data: ", data)
-    ##return jsonify(data)
+    data, _, _ = query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor)
+
+    return jsonify(data)
+    
+
 
 @app.route('/total-count', methods=['GET'])
 def get_total_count():
@@ -175,7 +139,6 @@ def get_total_count():
 
     # Query the total count from Catalysis Hub API
     total_count = query_total_count(reactants, products, surfaces, facets)
-    print("TOTAL COUNT: ", total_count)
     
     return jsonify({'totalCount': total_count})
 

@@ -1,9 +1,11 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import sqlite3
 import requests
 
 from generate_input_file import *
+import os
+from io import BytesIO
 
 app = Flask(__name__)
 CORS(app)
@@ -143,6 +145,23 @@ def get_total_count():
     total_count = query_total_count(reactants, products, surfaces, facets)
     
     return jsonify({'totalCount': total_count})
+
+@app.route('/generate-input-file', methods=['POST'])
+def generate_input_file_route():
+    user_inputs = request.json  # Assuming user inputs are sent as JSON
+    try:
+        # Generate the input file content
+        file_content = generate_input_file(user_inputs)
+        
+        # Create a BytesIO object to hold the file content
+        file_stream = BytesIO()
+        file_stream.write(file_content.encode())
+        file_stream.seek(0)
+        
+        # Send the file to the frontend
+        return send_file(file_stream, as_attachment=True, download_name='Input_SAC.mkm', mimetype='text/plain')
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=False)

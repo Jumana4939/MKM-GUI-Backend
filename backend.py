@@ -3,6 +3,8 @@ from flask_cors import CORS
 import sqlite3
 import requests
 
+from generate_input_file import *
+
 app = Flask(__name__)
 CORS(app)
 

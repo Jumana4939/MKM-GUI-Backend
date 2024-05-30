@@ -19,47 +19,47 @@ mole = 6.0223e23 # 1 mole used to convert eV to kJ/mole
 The {} are placeholders where the data will be inserted based on user input & reactions"""
 def default_file_format():
 	input_file_string = """# =========================== #
-	#     MKMCXX: Begin input     #
-	# =========================== #
+#     MKMCXX: Begin input     #
+# =========================== #
 
-	&compounds
-	# Gas phase compounds
-	# name ; surface ; initial concentration
-	{}
-	# Surface compounds (denote with a star)
-	{}
-
-
-
-	# free sites on the surface
-	# surface "*" : {}
-	{}
-
-	&reactions
-	# Adsorption;                            m^2;      amu;       ThetaRot(K); Sigma;    sticking;  J/mol
-	{}
-
-	# reaction;                              vf;       vb;         EafJ/mol;     Eab J/mol
-	{}
+&compounds
+# Gas phase compounds
+# name ; surface ; initial concentration
+{}
+# Surface compounds (denote with a star)
+{}
 
 
-	&settings
-	TYPE = SEQUENCERUN
-	# pressure in bar
-	PRESSURE = {}
-	#REAGENTS = {}
-	#KEYCOMPONENTS = {}
-	EACT=0
-	ORDERS=0
-	DRC=0
 
-	&runs
-	#temperature; simulation time; atol   ; rtol
-	{} 
+# free sites on the surface
+# surface "*" : {}
+{}
 
-	# =========================== #
-	#      MKMCXX: End input      #
-	# =========================== #"""
+&reactions
+# Adsorption;                            m^2;      amu;       ThetaRot(K); Sigma;    sticking;  J/mol
+{}
+
+# reaction;                              vf;       vb;         EafJ/mol;     Eab J/mol
+{}
+
+
+&settings
+TYPE = SEQUENCERUN
+# pressure in bar
+PRESSURE = {}
+#REAGENTS = {}
+#KEYCOMPONENTS = {}
+EACT=0
+ORDERS=0
+DRC=0
+
+&runs
+#temperature; simulation time; atol   ; rtol
+{} 
+
+# =========================== #
+#      MKMCXX: End input      #
+# =========================== #"""
    
 	return(input_file_string)
 
@@ -87,10 +87,14 @@ def sort_concentrations(input_concentrations):
 	return(gas_compounds, surface_compounds, free_site_surface)
 
 """ Return surfce based on first reaction data"""
-def fetch_surface_composition(first_reactions):
-	#### CHECK  - TO DO 
-	surface = first_reactions["surfaceComposition"]
-	return surface
+def fetch_surface_composition(input_reactions):
+	#### CHECK  - TO DO ####UPDATE remove node
+	""" print("first_reactions:", first_reactions)
+	surface = first_reactions[0]["node"]["surfaceComposition"]
+	return surface """
+	results = fetch_reaction_data(input_reactions[0])
+	surface_composition = results[0]["node"]["surfaceComposition"]
+	return surface_composition
 
 
 ## TO DO 
@@ -116,6 +120,52 @@ def seperate_reactions(input_reactions):
 			ar_reactions.append(i)
 
 	return hk_reactions, ar_reactions
+
+### -------------------------------TEMPORARY FOR TESTING-------------------------------------###
+###### DELETE THIS SECTIONS ######
+import sqlite3
+
+def fetch_reaction_data(id):
+	#query  = {"id": id}
+
+	# Connect to the database
+	conn = sqlite3.connect('TayebTu2024_v2.db')
+	cursor = conn.cursor()
+
+	# Query the database
+	#request_dict = {'reactants': "COgas", 'facet': 110}  # Example1
+	request_dict = {'id': id}
+
+	# Building the SQL query dynamically
+	query_parts = []
+	for key, value in request_dict.items():
+		if isinstance(value, str):  # Handle strings with LIKE
+				query_parts.append(f"{key} LIKE '%{value}%'")
+		else:  # Handle other data types with direct comparison
+				query_parts.append(f"{key} = {value}")
+
+	where_clause = " AND ".join(query_parts)
+	query = f"SELECT * FROM reaction WHERE {where_clause}"
+
+	# To see all enteries, uncomment the following command
+	#query = f"SELECT * FROM reaction"
+
+	# Execute the dynamic query
+	cursor.execute(query)
+
+	# Retrieve table names
+	column_names = [description[0] for description in cursor.description]
+
+	req_data = []
+	for row in cursor.fetchall():
+		temp_dict = {}
+		for i in range(len(column_names)):
+				temp_dict[column_names[i]] = str(row[i])
+		req_data.append({'node':temp_dict})
+
+	conn.close()
+
+	return req_data
 
 ### -----------------------------HK METHOD SECTION---------------------------------- ###
 """Formats the reaction equations into the required format. 
@@ -304,7 +354,7 @@ def calculating_sticking_sum(absoptions_reactions):
 ## TO DO - change reaction id to reaction data 
 ## pass hk_reactions to function 
 """Calculates the sticking value"""
-def fetch_sticking(i):
+def fetch_sticking(i,hk_reactions):
 	results = fetch_reaction_data(i)
 	activationEngery = results[0]["node"]["activationEnergy"]
 	try:
@@ -360,10 +410,10 @@ def format_hk_section(hk_reactions):
 	reactions_with_values = []
 
 	for i in (hk_reactions):
-		temp = "HK; " + f"{reaction_equation(i):<35} ; {fetch_m2():<8} ; {fetch_amu(i):<8} ; {fetch_theta(i):<8} ; {fetch_sigma(i):<8} ; {fetch_sticking(i):<8} ; {fetch_energyDES(i):<10} ; {fetch_adsorption():<3}"
+		temp = "HK; " + f"{reaction_equation(i):<35} ; {fetch_m2():<8} ; {fetch_amu(i):<8} ; {fetch_theta(i):<8} ; {fetch_sigma(i):<8} ; {fetch_sticking(i,hk_reactions):<8} ; {fetch_energyDES(i):<10} ; {fetch_adsorption():<3}"
 		reactions_with_values.append(temp)
 
-		return reactions_with_values
+	return reactions_with_values
 
 ### -----------------------------AR METHOD SECTION---------------------------------- ###
 """For the values vf (forward rate constant) and vb (backward rate constant), the calculation is very expensive and the value difference is negligible. 
@@ -461,6 +511,8 @@ def format_conditions_section(input_conditions):
 		simulation_conditions.append(temp)
 		i = i + 100
 
+	return simulation_conditions
+
 def fetch_pressure(user_inputs):
 	return user_inputs["pressure"], 
 
@@ -479,7 +531,9 @@ def generate_input_file(user_inputs):
 	# get the unique ids for each reaction from the user interface
 	input_reactions = user_inputs["reaction_ids"]
 	# get surface string for file 
-	surface = fetch_surface_composition(input_reactions[0])
+	####TO DO - TO FIX 
+	#surface = fetch_surface_composition(input_reactions[0])
+	surface = fetch_surface_composition(input_reactions)
 
 	# seperate the reactions into the 2 different types
 	hk_reactions, ar_reactions = seperate_reactions(input_reactions)
@@ -496,7 +550,7 @@ def generate_input_file(user_inputs):
 	formatted_input_file_string = input_file_string.format(
 		list_to_string(gas_compounds),
 		list_to_string(surface_compounds),
-		fetch_surface_composition(),
+		surface,
 		list_to_string(free_site_surface),
 		list_to_string(formatted_hk_section),
 		list_to_string(formatted_ar_section),

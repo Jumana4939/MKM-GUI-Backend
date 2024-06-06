@@ -274,10 +274,9 @@ def calculating_sticking_sum(absoptions_reactions):
 	sumation_of_sticking_values = 0
 
 	for reaction in absoptions_reactions:
-		activationEngery = reaction["activationEnergy"]
 		try:
-			activationEngery  = float(activationEngery)
-		except ValueError:
+			activationEngery  = float(reaction["activationEnergy"])
+		except:
 			activationEngery  =  1.0
 		
 		# Convert from eV to kj/mole
@@ -296,10 +295,9 @@ def calculating_sticking_sum(absoptions_reactions):
 
 """Calculates the sticking value"""
 def fetch_sticking(reaction,hk_reactions):
-	activationEngery = reaction["activationEnergy"]
 	try:
-		activationEngery  = float(activationEngery)
-	except ValueError:
+		activationEngery  = float(reaction["activationEnergy"])
+	except:
 		activationEngery  =  1.0
 
 	# Convert from eV to kj/mole
@@ -324,10 +322,9 @@ def fetch_sticking(reaction,hk_reactions):
 
 """Calculates the DES energy value"""
 def fetch_energyDES(reaction):
-	reactionEngery = reaction["reactionEnergy"]
 	try:
-		reactionEngery = float(reactionEngery)
-	except ValueError:
+		reactionEngery = float(reaction["reactionEnergy"])
+	except:
 		return 0.0
   
 	# calculating activation energy for a coverage of 1
@@ -375,9 +372,8 @@ def fetch_vb():
 """Calculates the forward activation energy value"""
 def fetch_EafJ(reaction):
 	# forward activation energy = activation energy
-	activationEngery = reaction["activationEnergy"]
 	try: 
-		activationEngery = float(activationEngery)
+		activationEngery = float(reaction["activationEnergy"])
 	except: 
 		activationEngery = 1.0
 
@@ -394,14 +390,12 @@ def fetch_EafJ(reaction):
 """Calculates the backwards activation energy value"""
 def fetch_Eab(reaction):
 	# backward activation energy = activation energy - reaction energy
-	activationEngery = reaction["activationEnergy"]
-	reactionEngery = reaction["reactionEnergy"]
 	try: 
-		activationEngery = float(activationEngery)
+		activationEngery = float(reaction["activationEnergy"])
 	except: 
 		activationEngery = 1.0
 	try: 
-		reactionEngery = float(reactionEngery)
+		reactionEngery = float(reaction["reactionEnergy"])
 	except: 
 		reactionEngery = 1.0
 

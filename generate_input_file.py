@@ -514,7 +514,7 @@ def format_conditions_section(input_conditions):
 	return simulation_conditions
 
 def fetch_pressure(user_inputs):
-	return user_inputs["pressure"], 
+	return user_inputs["pressure"]
 
 ### -----------------------------MAIN FUCTION SECTION---------------------------------- ###
 def list_to_string(input_list):
@@ -554,7 +554,7 @@ def generate_input_file(user_inputs):
 		list_to_string(free_site_surface),
 		list_to_string(formatted_hk_section),
 		list_to_string(formatted_ar_section),
-		fetch_pressure(user_inputs), 
+		fetch_pressure(user_inputs),
 		"{}","{}",
 		list_to_string(formatted_conditions_section))
 	

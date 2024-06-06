@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-import sqlite3
 import requests
 
 from generate_input_file import *
@@ -13,10 +12,40 @@ CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
 # Constants
 ITEMS_PER_PAGE = 50
 
-# Function to connect to the SQLite database
-def connect_db():
-    conn = sqlite3.connect('./reactionDB.db')
-    return conn
+def query_local_data(reactants, products, surfaces, facets):
+  data = []
+  filterCondition = {'reactants': reactants if reactants != "~" else "", 
+                     'facet': facets, 
+                     'surface_composition': surfaces if surfaces != "~" else "",
+                     'products': products if products != "~" else ""}
+
+  filterCondition = {
+    'reactants': "", 
+    'facet': "", 
+    'surfaceComposition': "",
+    'products': ""
+  }
+
+  print("filterCondition: ",filterCondition)
+  
+  print("Right before call---------------")
+  
+  response = requests.post('http://10.161.209.65:5000/get_data', json=filterCondition)
+
+  print("response:", response)
+  if response.status_code == 200:
+    data = [item['node'] for item in response.json()]
+    #Add data source key value pair to each reaction data 
+    for item in data: 
+      item['dataSource'] = 'AiScia'
+      item['activationEnergy'] = float(item['activationEnergy'])
+      item['reactionEnergy'] = float(item['reactionEnergy'])
+    print("data:", data)
+    return data
+  else:
+    print("Responce Error")
+    return []
+
 
 def query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor=None):
   after_clause = f', after: "{after_cursor}"' if after_cursor else ''
@@ -60,14 +89,21 @@ def query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor=
   if response.status_code == 200:
     # Extract the dictionaries inside each "node" object
     data = response.json()['data']['reactions']
-    return [edge['node'] for edge in data['edges']], data['pageInfo']['endCursor'], data['pageInfo']['hasNextPage']
+    formattedData = [edge['node'] for edge in data['edges']]
+    #Add data source key value pair to each reaction data 
+    for item in formattedData:
+      item['dataSource'] = 'CatalysisHub'
+      ## TO DO - what should the default values be 
+      ## is there a way to calculate the nessary data???
+      item['molecularData'] = '{"defualt": {"molecularWeight": 1,"symmetrySigma": 1, "rotationalConstant": 1}}'
+    return formattedData, data['pageInfo']['endCursor'], data['pageInfo']['hasNextPage']
   else:
     return [], None, False
     
 def query_total_count(reactants, products, surfaces, facets):
   query = f'''
   query {{
-    reactions(first: 100, surfaceComposition:"{surfaces}", facet:"~{facets}", reactants: "{reactants}", products: "{products}") {{
+    reactions(first: 1, surfaceComposition:"{surfaces}", facet:"~{facets}", reactants: "{reactants}", products: "{products}") {{
       totalCount
       pageInfo {{
         hasNextPage
@@ -118,6 +154,17 @@ def query_data():
   facets = request.args.get('facets') or ""
   page = int(request.args.get('page', 1))
 
+  #Local data
+  ### NEED TO FIX LOGIC 
+  """Need to take into consideration how much there is in total, 
+  section that into table pages, have this taken into consideration 
+  when making requests from catalysisHub
+  For exmple: if we have 5 local data then we need 45 cataylsisHub data for the first page"""
+  if page == 1: 
+    localData = query_local_data(reactants, products, surfaces, facets)
+  else: 
+    localData = []
+
 
   # Fetch data from Catalysis Hub API
   after_cursor = None
@@ -127,11 +174,11 @@ def query_data():
       if not has_next_page:
         return jsonify([])  # No more data
 
-  data, _, _ = query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor)
+  catalysisHubData, _, _ = query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor)
 
+  data = localData + catalysisHubData
   return jsonify(data)
     
-
 
 @app.route('/total-count', methods=['GET'])
 def get_total_count():
@@ -142,9 +189,16 @@ def get_total_count():
   facets = request.args.get('facets') or ""
 
   # Query the total count from Catalysis Hub API
-  total_count = query_total_count(reactants, products, surfaces, facets)
+  catalysisHub_count = query_total_count(reactants, products, surfaces, facets)
+
+  #Local data
+  localData = query_local_data(reactants, products, surfaces, facets)
+  local_data_count = len(localData)
+
+  total_count = catalysisHub_count + local_data_count
 
   return jsonify({'totalCount': total_count})
+
 
 @app.route('/generate-input-file', methods=['POST'])
 def generate_input_file_route():
@@ -157,6 +211,7 @@ def generate_input_file_route():
       file.write(input_file_content)
   # Send the file as a response
   return send_file(file_path, as_attachment=True, download_name='Input_SAC.mkm')
+
 
 if __name__ == '__main__':
   app.run(debug=False)

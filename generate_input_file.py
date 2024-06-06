@@ -15,6 +15,7 @@ kb_eV = 8.1673303e-5 # eV/K - Boltzmann's constant in eV
 ev_kj = 1.602176565e-22 # kJ/eV  - conversion from electronic volts to kilo Joules
 mole = 6.0223e23 # 1 mole used to convert eV to kJ/mole
 
+
 """Default Standard format for the file to be generated.
 The {} are placeholders where the data will be inserted based on user input & reactions"""
 def default_file_format():
@@ -88,12 +89,8 @@ def sort_concentrations(input_concentrations):
 
 """ Return surfce based on first reaction data"""
 def fetch_surface_composition(input_reactions):
-	#### CHECK  - TO DO ####UPDATE remove node
-	""" print("first_reactions:", first_reactions)
-	surface = first_reactions[0]["node"]["surfaceComposition"]
-	return surface """
-	results = fetch_reaction_data(input_reactions[0])
-	surface_composition = results[0]["node"]["surfaceComposition"]
+	first_reaction_data = input_reactions[0]
+	surface_composition = first_reaction_data["surfaceComposition"]
 	return surface_composition
 
 
@@ -105,67 +102,21 @@ This is based on first the reaction includes the surface,
 def seperate_reactions(input_reactions): 
 	hk_reactions = []
 	ar_reactions = []
-	for i in input_reactions:
+	for reaction in input_reactions:
 		#fetch equation of reaction 
-		results = fetch_reaction_data(str(i))
-		equation = results[0]["node"]["Equation"]
+		equation = reaction["Equation"]
 		# Split the input string into reactants and products
 		reactants, products = map(str.strip, equation.split("->"))
 		# Regular expression to match an integer followed by '*'
 		pattern = re.compile(r' \d+\*')
 		#check if its absorbant reaction 
 		if ((" *" in reactants) or pattern.search(reactants)) and not (" 0*" in reactants): 
-			hk_reactions.append(i)
+			hk_reactions.append(reaction)
 		else: 
-			ar_reactions.append(i)
+			ar_reactions.append(reaction)
 
 	return hk_reactions, ar_reactions
 
-### -------------------------------TEMPORARY FOR TESTING-------------------------------------###
-###### DELETE THIS SECTIONS ######
-import sqlite3
-
-def fetch_reaction_data(id):
-	#query  = {"id": id}
-
-	# Connect to the database
-	conn = sqlite3.connect('TayebTu2024_v2.db')
-	cursor = conn.cursor()
-
-	# Query the database
-	#request_dict = {'reactants': "COgas", 'facet': 110}  # Example1
-	request_dict = {'id': id}
-
-	# Building the SQL query dynamically
-	query_parts = []
-	for key, value in request_dict.items():
-		if isinstance(value, str):  # Handle strings with LIKE
-				query_parts.append(f"{key} LIKE '%{value}%'")
-		else:  # Handle other data types with direct comparison
-				query_parts.append(f"{key} = {value}")
-
-	where_clause = " AND ".join(query_parts)
-	query = f"SELECT * FROM reaction WHERE {where_clause}"
-
-	# To see all enteries, uncomment the following command
-	#query = f"SELECT * FROM reaction"
-
-	# Execute the dynamic query
-	cursor.execute(query)
-
-	# Retrieve table names
-	column_names = [description[0] for description in cursor.description]
-
-	req_data = []
-	for row in cursor.fetchall():
-		temp_dict = {}
-		for i in range(len(column_names)):
-				temp_dict[column_names[i]] = str(row[i])
-		req_data.append({'node':temp_dict})
-
-	conn.close()
-
-	return req_data
 
 ### -----------------------------HK METHOD SECTION---------------------------------- ###
 """Formats the reaction equations into the required format. 
@@ -246,10 +197,10 @@ def round_to_sf(number, sf):
 	return rounded_number
 
 
-"""Helper function for "" function"""
-def get_coverage(results): 
+"""Helper function for multiple functions"""
+def get_coverage(reaction): 
 	try: 
-		coverage = results[0]["node"]["coverages"]
+		coverage = reaction["coverages"]
 		# extracting only the value from the string 
 		coverage = coverage.split(":")[1]
 		coverage = coverage.strip()[:-1]
@@ -258,13 +209,12 @@ def get_coverage(results):
 		coverage = 1 
 	return coverage
 
+
 ### --- HK calculations --- ###
-## TO DO - change reaction id to reaction data 
 ## TO DO - what should happen when using reactions from catalysisHub with no molecularData
 """fetches molecular weight value from molecular data"""
-def reaction_equation(i):
-	results = fetch_reaction_data(i)
-	equation = results[0]["node"]["Equation"]
+def reaction_equation(reaction):
+	equation = reaction["Equation"]
 	processed_equation = format_equation(equation)
 	return processed_equation
 
@@ -274,13 +224,11 @@ def fetch_m2():
 	return str("1e-20")
 
 
-## TO DO - change reaction id to reaction data 
 ## TO DO - what should happen when using reactions from catalysisHub with no molecularData
 """fetches molecular weight value from molecular data"""
-def fetch_amu(i):
-	results = fetch_reaction_data(i)
+def fetch_amu(reaction):
 	try: 
-		molecularData = results[0]["node"]["molecularData"]
+		molecularData = reaction["molecularData"]
 		molecularData_dict = json.loads(molecularData)
 		molecularData_list = list(molecularData_dict.values())
 		amu = molecularData_list[0]["molecularWeight"]
@@ -291,13 +239,11 @@ def fetch_amu(i):
 	return str(amu)
 
 
-## TO DO - change reaction id to reaction data 
 ## TO DO - what should happen when using reactions from catalysisHub with no molecularData
 """fetches rotational constant value from molecular data"""
-def fetch_theta(i):
-	results = fetch_reaction_data(i)
+def fetch_theta(reaction):
 	try: 
-		molecularData = results[0]["node"]["molecularData"]
+		molecularData = reaction["molecularData"]
 		molecularData_dict = json.loads(molecularData)
 		molecularData_list = list(molecularData_dict.values())
 		theta = molecularData_list[0]["rotationalConstant"]
@@ -308,13 +254,11 @@ def fetch_theta(i):
 	return str(theta)
 
 
-## TO DO - change reaction id to reaction data 
 ## TO DO - what should happen when using reactions from catalysisHub with no molecularData
 """fetches sigma value from molecular data"""
-def fetch_sigma(i):
-	results = fetch_reaction_data(i)
+def fetch_sigma(reaction):
 	try: 
-		molecularData = results[0]["node"]["molecularData"]
+		molecularData = reaction["molecularData"]
 		molecularData_dict = json.loads(molecularData)
 		molecularData_list = list(molecularData_dict.values())
 		sigma = molecularData_list[0]["symmetrySigma"]
@@ -324,15 +268,13 @@ def fetch_sigma(i):
 	return str(sigma)
 
 
-## TO DO - change reaction id to reaction data 
 """Calculates the sticking value SUM for all reactions used to calculate the 
     final sticking value for each reaction"""
 def calculating_sticking_sum(absoptions_reactions): 
 	sumation_of_sticking_values = 0
 
-	for i in absoptions_reactions:
-		results = fetch_reaction_data(i)
-		activationEngery = results[0]["node"]["activationEnergy"]
+	for reaction in absoptions_reactions:
+		activationEngery = reaction["activationEnergy"]
 		try:
 			activationEngery  = float(activationEngery)
 		except ValueError:
@@ -342,7 +284,7 @@ def calculating_sticking_sum(absoptions_reactions):
 		activationEngery = activationEngery*evtj*mole
 
 		#  calculating activation energy for a coverage of 1
-		coverage = get_coverage(results)
+		coverage = get_coverage(reaction)
 		single_activation_energy = activationEngery/coverage
 
 		# Tempreture value is taken as 520 for all sticking value calculations
@@ -351,12 +293,10 @@ def calculating_sticking_sum(absoptions_reactions):
 
 	return sumation_of_sticking_values
 
-## TO DO - change reaction id to reaction data 
-## pass hk_reactions to function 
+
 """Calculates the sticking value"""
-def fetch_sticking(i,hk_reactions):
-	results = fetch_reaction_data(i)
-	activationEngery = results[0]["node"]["activationEnergy"]
+def fetch_sticking(reaction,hk_reactions):
+	activationEngery = reaction["activationEnergy"]
 	try:
 		activationEngery  = float(activationEngery)
 	except ValueError:
@@ -366,7 +306,7 @@ def fetch_sticking(i,hk_reactions):
 	activationEngery = activationEngery*evtj*mole
 
 	#  calculating activation energy for a coverage of 1
-	coverage = get_coverage(results)
+	coverage = get_coverage(reaction)
 	single_activation_energy = activationEngery/coverage
 
 	#indiviual_sticking_value = math.exp(division_higher_percision)
@@ -381,18 +321,17 @@ def fetch_sticking(i,hk_reactions):
 
 	return str(sticking)
 
-## TO DO - change reaction id to reaction data 
+
 """Calculates the DES energy value"""
-def fetch_energyDES(i):
-	results = fetch_reaction_data(i)
-	reactionEngery = results[0]["node"]["reactionEnergy"]
+def fetch_energyDES(reaction):
+	reactionEngery = reaction["reactionEnergy"]
 	try:
 		reactionEngery = float(reactionEngery)
 	except ValueError:
 		return 0.0
   
 	# calculating activation energy for a coverage of 1
-	coverage = get_coverage(results)
+	coverage = get_coverage(reaction)
 	single_reaction_energy = reactionEngery/coverage
 
 	desorptionEnergy = - single_reaction_energy
@@ -400,6 +339,7 @@ def fetch_energyDES(i):
 	desorptionEnergy = desorptionEnergy * evtj * _Nav
 	desorptionEnergy = "{:.2e}".format(desorptionEnergy).replace('e+', 'e')
 	return str(desorptionEnergy)
+
 
 """Current adsorption is constantly 1"""
 def fetch_adsorption():
@@ -409,8 +349,8 @@ def fetch_adsorption():
 def format_hk_section(hk_reactions):
 	reactions_with_values = []
 
-	for i in (hk_reactions):
-		temp = "HK; " + f"{reaction_equation(i):<35} ; {fetch_m2():<8} ; {fetch_amu(i):<8} ; {fetch_theta(i):<8} ; {fetch_sigma(i):<8} ; {fetch_sticking(i,hk_reactions):<8} ; {fetch_energyDES(i):<10} ; {fetch_adsorption():<3}"
+	for reaction in (hk_reactions):
+		temp = "HK; " + f"{reaction_equation(reaction):<35} ; {fetch_m2():<8} ; {fetch_amu(reaction):<8} ; {fetch_theta(reaction):<8} ; {fetch_sigma(reaction):<8} ; {fetch_sticking(reaction,hk_reactions):<8} ; {fetch_energyDES(reaction):<10} ; {fetch_adsorption():<3}"
 		reactions_with_values.append(temp)
 
 	return reactions_with_values
@@ -431,12 +371,11 @@ def fetch_vb():
 	# use this value for all 
 	return "6.2e12"
 
-## TO DO - change reaction id to reaction data 
+
 """Calculates the forward activation energy value"""
-def fetch_EafJ(i):
+def fetch_EafJ(reaction):
 	# forward activation energy = activation energy
-	results = fetch_reaction_data(i)
-	activationEngery = results[0]["node"]["activationEnergy"]
+	activationEngery = reaction["activationEnergy"]
 	try: 
 		activationEngery = float(activationEngery)
 	except: 
@@ -445,19 +384,18 @@ def fetch_EafJ(i):
 	# Convert from eV to kj/mole
 	activationEngery = activationEngery*evtj*mole
 
-	coverage = get_coverage(results)
+	coverage = get_coverage(reaction)
 	single_activation_energy = activationEngery/coverage
 
 	single_activation_energy = round(single_activation_energy,2)
 	return str(single_activation_energy)
 
-## TO DO - change reaction id to reaction data 
+
 """Calculates the backwards activation energy value"""
-def fetch_Eab(i):
+def fetch_Eab(reaction):
 	# backward activation energy = activation energy - reaction energy
-	results = fetch_reaction_data(i)
-	activationEngery = results[0]["node"]["activationEnergy"]
-	reactionEngery = results[0]["node"]["reactionEnergy"]
+	activationEngery = reaction["activationEnergy"]
+	reactionEngery = reaction["reactionEnergy"]
 	try: 
 		activationEngery = float(activationEngery)
 	except: 
@@ -471,7 +409,7 @@ def fetch_Eab(i):
 	activationEngery = activationEngery*evtj*mole
 	reactionEngery = reactionEngery*evtj*mole
 
-	coverage = get_coverage(results)
+	coverage = get_coverage(reaction)
 	single_activation_energy = activationEngery/coverage
 	single_reaction_energy = reactionEngery/coverage
 
@@ -482,8 +420,8 @@ def fetch_Eab(i):
 def format_ar_section(ar_reactions):
 	reactions2_with_values = []
 
-	for i in (ar_reactions):
-		temp = "AR; " + f"{reaction_equation(i):<35} ; {fetch_vf():<8} ; {fetch_vb():<8} ; {fetch_EafJ(i):<10} ; {fetch_Eab(i):<10}"
+	for reaction in (ar_reactions):
+		temp = "AR; " + f"{reaction_equation(reaction):<35} ; {fetch_vf():<8} ; {fetch_vb():<8} ; {fetch_EafJ(reaction):<10} ; {fetch_Eab(reaction):<10}"
 		reactions2_with_values.append(temp)
 
 	return reactions2_with_values
@@ -529,7 +467,7 @@ def generate_input_file(user_inputs):
 
 	##### CHANGE so list of reaction data and NOT reaction ids - TO DO 
 	# get the unique ids for each reaction from the user interface
-	input_reactions = user_inputs["reaction_ids"]
+	input_reactions = user_inputs["reactions_data"]
 	# get surface string for file 
 	####TO DO - TO FIX 
 	#surface = fetch_surface_composition(input_reactions[0])
@@ -564,9 +502,11 @@ def generate_input_file(user_inputs):
 
 
 if __name__ == '__main__':
-	##### CHANGE so list of reaction data and NOT reaction ids - TO DO 
+	##### NON FUNCTIONAL - EXAMPLE FOR FORMAT / STRUCTURE PURPOSE ONLY 
 	user_inputs = {"initial_concentrations":{"CO2":"0.4", "H20":"0.6", "H":"0", "H2":"0", "CO":"0", "HCOOH":"0", "COOH*":"0", "*":"1", "CO*":"0", "CO2*":"0", "OCHO*":"0"},
-				"reaction_ids":["1","2","3","4","5"],
+				"reactions_data":[{'Equation': 'FeCO* -> FeCO*', 'activationEnergy': 0.9991554200000792, 'chemicalComposition': 'Fe120', 'coverages': '{}', 'dftCode': 'VASP', 'dftFunctional': 'GGA-PBE', 'facet': '100', 'id': '1', 'molecularData': '{"FeCOstar": {"molecularWeight": 27.994914622099998, "symmetrySigma": 1, "rotationalConstant": 110.39269857451734}}', 'products': '{"FeCOstar": 1}', 'pubId': 'TayebTu2024', 'reactants': '{"FeCOstar": 1}', 'reactionEnergy': 0.6190308800000821, 'reactionSystems': '{"name":"star","energy_correction":0.0,"ase_id":"d6ce4896c5ef80595a72e47af2012a1c"}', 'sites': '{"FeCOstar": ["hollow", "top"]}', 'surfaceComposition': 'Fe', 'username': 'winther@stanford.edu', 'dataSource': 'AiScia'},
+					  {'Equation': 'FeCO* -> FeCO*', 'activationEnergy': 0.9991554200000792, 'chemicalComposition': 'Fe120', 'coverages': '{}', 'dftCode': 'VASP', 'dftFunctional': 'GGA-PBE', 'facet': '100', 'id': '1', 'molecularData': '{"FeCOstar": {"molecularWeight": 27.994914622099998, "symmetrySigma": 1, "rotationalConstant": 110.39269857451734}}', 'products': '{"FeCOstar": 1}', 'pubId': 'TayebTu2024', 'reactants': '{"FeCOstar": 1}', 'reactionEnergy': 0.6190308800000821, 'reactionSystems': '{"name":"star","energy_correction":0.0,"ase_id":"d6ce4896c5ef80595a72e47af2012a1c"}', 'sites': '{"FeCOstar": ["hollow", "top"]}', 'surfaceComposition': 'Fe', 'username': 'winther@stanford.edu', 'dataSource': 'AiScia'},
+					  {'Equation': 'FeCO* -> FeCO*', 'activationEnergy': 0.9991554200000792, 'chemicalComposition': 'Fe120', 'coverages': '{}', 'dftCode': 'VASP', 'dftFunctional': 'GGA-PBE', 'facet': '100', 'id': '1', 'molecularData': '{"FeCOstar": {"molecularWeight": 27.994914622099998, "symmetrySigma": 1, "rotationalConstant": 110.39269857451734}}', 'products': '{"FeCOstar": 1}', 'pubId': 'TayebTu2024', 'reactants': '{"FeCOstar": 1}', 'reactionEnergy': 0.6190308800000821, 'reactionSystems': '{"name":"star","energy_correction":0.0,"ase_id":"d6ce4896c5ef80595a72e47af2012a1c"}', 'sites': '{"FeCOstar": ["hollow", "top"]}', 'surfaceComposition': 'Fe', 'username': 'winther@stanford.edu', 'dataSource': 'AiScia'}],
 				"initial_conditions":{"min_temperature": 300, "max_temperature": 900, "time": "10e5", "atol": "1e-8", "rtol": "1e-8"},
 				"pressure": "1"}
 	

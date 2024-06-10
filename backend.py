@@ -16,19 +16,10 @@ def query_local_data(reactants, products, surfaces, facets):
   data = []
   filterCondition = {'reactants': reactants if reactants != "~" else "", 
                      'facet': facets, 
-                     'surface_composition': surfaces if surfaces != "~" else "",
+                     'surfaceComposition': surfaces if surfaces != "~" else "",
                      'products': products if products != "~" else ""}
 
-  filterCondition = {
-    'reactants': "", 
-    'facet': "", 
-    'surfaceComposition': "",
-    'products': ""
-  }
-
   print("filterCondition: ",filterCondition)
-  
-  print("Right before call---------------")
   
   response = requests.post('http://10.161.209.65:5000/get_data', json=filterCondition)
 
@@ -38,8 +29,14 @@ def query_local_data(reactants, products, surfaces, facets):
     #Add data source key value pair to each reaction data 
     for item in data: 
       item['dataSource'] = 'AiScia'
-      item['activationEnergy'] = float(item['activationEnergy'])
-      item['reactionEnergy'] = float(item['reactionEnergy'])
+      try: 
+        item['activationEnergy'] = float(item['activationEnergy'])
+      except:
+        item['activationEnergy'] = None
+      try:
+        item['reactionEnergy'] = float(item['reactionEnergy'])
+      except: 
+        item['reactionEnergy'] = None
     print("data:", data)
     return data
   else:

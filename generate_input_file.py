@@ -437,8 +437,8 @@ def fetch_rtol(input_conditions):
 def format_conditions_section(input_conditions):
 	simulation_conditions = []
 
-	i = input_conditions["min_temperature"]
-	while i <= input_conditions["max_temperature"]:
+	i = int(input_conditions["min_temperature"]) 
+	while i <= int(input_conditions["max_temperature"]):
 		temp = f"{fetch_temperature(i):<11} ; {fetch_time(input_conditions):<14} ; {fetch_atol(input_conditions):<6} ; {fetch_rtol(input_conditions):<6}"
 		simulation_conditions.append(temp)
 		i = i + 100

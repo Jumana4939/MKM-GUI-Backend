@@ -459,12 +459,9 @@ def generate_input_file(user_inputs):
 	#generate concentation strings for file
 	gas_compounds, surface_compounds, free_site_surface = sort_concentrations(input_concentrations)
 
-	##### CHANGE so list of reaction data and NOT reaction ids - TO DO 
 	# get the unique ids for each reaction from the user interface
 	input_reactions = user_inputs["reactions_data"]
 	# get surface string for file 
-	####TO DO - TO FIX 
-	#surface = fetch_surface_composition(input_reactions[0])
 	surface = fetch_surface_composition(input_reactions)
 
 	# seperate the reactions into the 2 different types

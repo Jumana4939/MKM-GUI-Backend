@@ -21,26 +21,33 @@ def query_local_data(reactants, products, surfaces, facets):
 
   print("filterCondition: ",filterCondition)
   
-  response = requests.post('http://10.161.209.65:5000/get_data', json=filterCondition)
+  try:
+    response = requests.post('http://10.161.209.65:5000/get_data', json=filterCondition)
 
-  print("response:", response)
-  if response.status_code == 200:
-    data = [item['node'] for item in response.json()]
-    #Add data source key value pair to each reaction data 
-    for item in data: 
-      item['dataSource'] = 'AiScia'
-      try: 
-        item['activationEnergy'] = float(item['activationEnergy'])
-      except:
-        item['activationEnergy'] = None
-      try:
-        item['reactionEnergy'] = float(item['reactionEnergy'])
-      except: 
-        item['reactionEnergy'] = None
-    print("data:", data)
-    return data
-  else:
-    print("Responce Error")
+    print("response:", response)
+    if response.status_code == 200:
+      data = [item['node'] for item in response.json()]
+      #Add data source key value pair to each reaction data 
+      for item in data: 
+        item['dataSource'] = 'AiScia'
+        try: 
+          item['activationEnergy'] = float(item['activationEnergy'])
+        except:
+          item['activationEnergy'] = None
+        try:
+          item['reactionEnergy'] = float(item['reactionEnergy'])
+        except: 
+          item['reactionEnergy'] = None
+      print("data:", data)
+      return data
+    else:
+      print("Responce Error")
+      return []
+  except requests.ConnectionError:
+    print("Failed to connect to local data service.")
+    return []
+  except requests.RequestException as e:
+    print("Request failed:", e)
     return []
 
 
@@ -82,20 +89,28 @@ def query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor=
   }}
   '''
 
-  response = requests.post('https://api.catalysis-hub.org/graphql', json={'query': query})
-  if response.status_code == 200:
-    # Extract the dictionaries inside each "node" object
-    data = response.json()['data']['reactions']
-    formattedData = [edge['node'] for edge in data['edges']]
-    #Add data source key value pair to each reaction data 
-    for item in formattedData:
-      item['dataSource'] = 'CatalysisHub'
-      ## TO DO - what should the default values be 
-      ## is there a way to calculate the nessary data???
-      item['molecularData'] = '{"defualt": {"molecularWeight": 1,"symmetrySigma": 1, "rotationalConstant": 1}}'
-    return formattedData, data['pageInfo']['endCursor'], data['pageInfo']['hasNextPage']
-  else:
+  try: 
+    response = requests.post('https://api.catalysis-hub.org/graphql', json={'query': query})
+    if response.status_code == 200:
+      # Extract the dictionaries inside each "node" object
+      data = response.json()['data']['reactions']
+      formattedData = [edge['node'] for edge in data['edges']]
+      #Add data source key value pair to each reaction data 
+      for item in formattedData:
+        item['dataSource'] = 'CatalysisHub'
+        ## TO DO - what should the default values be 
+        ## is there a way to calculate the nessary data???
+        item['molecularData'] = '{"defualt": {"molecularWeight": 1,"symmetrySigma": 1, "rotationalConstant": 1}}'
+      return formattedData, data['pageInfo']['endCursor'], data['pageInfo']['hasNextPage']
+    else:
+      return [], None, False
+  except requests.ConnectionError:
+    print("Failed to connect to Catalysis Hub API.")
     return [], None, False
+  except requests.RequestException as e:
+    print("Request failed:", e)
+    return [], None, False
+
     
 def query_total_count(reactants, products, surfaces, facets):
   query = f'''
@@ -134,80 +149,100 @@ def query_total_count(reactants, products, surfaces, facets):
   }}
   '''
   
-  response = requests.post('https://api.catalysis-hub.org/graphql', json={'query': query})
-  if response.status_code == 200:
-    return response.json()['data']['reactions']['totalCount']
-  else:
+  try:
+    response = requests.post('https://api.catalysis-hub.org/graphql', json={'query': query})
+    if response.status_code == 200:
+      return response.json()['data']['reactions']['totalCount']
+    else:
+      return 0
+  except requests.ConnectionError:
+    print("Failed to connect to Catalysis Hub API.")
+    return 0
+  except requests.RequestException as e:
+    print("Request failed:", e)
     return 0
 
 
 # API endpoint to query data from the database
 @app.route('/query', methods=['GET'])
 def query_data():
-  #Extract parameters
-  reactants = request.args.get('reactants') or "~"
-  products = request.args.get('products') or "~"
-  surfaces = request.args.get('surfaces') or "~"
-  facets = request.args.get('facets') or ""
-  page = int(request.args.get('page', 1))
+  try:
+    #Extract parameters
+    reactants = request.args.get('reactants') or "~"
+    products = request.args.get('products') or "~"
+    surfaces = request.args.get('surfaces') or "~"
+    facets = request.args.get('facets') or ""
+    page = int(request.args.get('page', 1))
 
-  #Local data
-  ### NEED TO FIX LOGIC 
-  """Need to take into consideration how much there is in total, 
-  section that into table pages, have this taken into consideration 
-  when making requests from catalysisHub
-  For exmple: if we have 5 local data then we need 45 cataylsisHub data for the first page"""
-  if page == 1: 
-    localData = query_local_data(reactants, products, surfaces, facets)
-  else: 
-    localData = []
+    #Local data
+    ### NEED TO FIX LOGIC 
+    """Need to take into consideration how much there is in total, 
+    section that into table pages, have this taken into consideration 
+    when making requests from catalysisHub
+    For exmple: if we have 5 local data then we need 45 cataylsisHub data for the first page"""
+    if page == 1: 
+      localData = query_local_data(reactants, products, surfaces, facets)
+    else: 
+      localData = []
 
 
-  # Fetch data from Catalysis Hub API
-  after_cursor = None
-  if page > 1:
-    for _ in range(page - 1):
-      _, after_cursor, has_next_page = query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor)
-      if not has_next_page:
-        return jsonify([])  # No more data
+    # Fetch data from Catalysis Hub API
+    after_cursor = None
+    if page > 1:
+      for _ in range(page - 1):
+        _, after_cursor, has_next_page = query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor)
+        if not has_next_page:
+          return jsonify([])  # No more data
 
-  catalysisHubData, _, _ = query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor)
+    catalysisHubData, _, _ = query_catalysisHub_data(reactants, products, surfaces, facets, after_cursor)
 
-  data = localData + catalysisHubData
-  return jsonify(data)
-    
+    data = localData + catalysisHubData
+    return jsonify(data)
+  except Exception as e:
+    print("An error occurred:", e)
+    return jsonify({"error": "An unexpected error occurred."}), 500
+
 
 @app.route('/total-count', methods=['GET'])
 def get_total_count():
-  # Extract parameters
-  reactants = request.args.get('reactants') or "~"
-  products = request.args.get('products') or "~"
-  surfaces = request.args.get('surfaces') or "~"
-  facets = request.args.get('facets') or ""
+  try:
+    # Extract parameters
+    reactants = request.args.get('reactants') or "~"
+    products = request.args.get('products') or "~"
+    surfaces = request.args.get('surfaces') or "~"
+    facets = request.args.get('facets') or ""
 
-  # Query the total count from Catalysis Hub API
-  catalysisHub_count = query_total_count(reactants, products, surfaces, facets)
+    # Query the total count from Catalysis Hub API
+    catalysisHub_count = query_total_count(reactants, products, surfaces, facets)
 
-  #Local data
-  localData = query_local_data(reactants, products, surfaces, facets)
-  local_data_count = len(localData)
+    #Local data
+    localData = query_local_data(reactants, products, surfaces, facets)
+    local_data_count = len(localData)
 
-  total_count = catalysisHub_count + local_data_count
+    total_count = catalysisHub_count + local_data_count
 
-  return jsonify({'totalCount': total_count})
+    return jsonify({'totalCount': total_count})
+  
+  except Exception as e:
+    print("An error occurred:", e)
+    return jsonify({"error": "An unexpected error occurred."}), 500
 
 
 @app.route('/generate-input-file', methods=['POST'])
 def generate_input_file_route():
-  user_inputs = request.json  # Assuming user inputs are sent as JSON
-  # Generate the input file content as a string
-  input_file_content = generate_input_file(user_inputs)
-  # Create a temporary file to store the input file content
-  file_path = './Input_SAC.mkm'
-  with open(file_path, 'w') as file:
-      file.write(input_file_content)
-  # Send the file as a response
-  return send_file(file_path, as_attachment=True, download_name='Input_SAC.mkm')
+  try:
+    user_inputs = request.json  # Assuming user inputs are sent as JSON
+    # Generate the input file content as a string
+    input_file_content = generate_input_file(user_inputs)
+    # Create a temporary file to store the input file content
+    file_path = './Input_SAC.mkm'
+    with open(file_path, 'w') as file:
+        file.write(input_file_content)
+    # Send the file as a response
+    return send_file(file_path, as_attachment=True, download_name='Input_SAC.mkm')
+  except Exception as e:
+    print("An error occurred:", e)
+    return jsonify({"error": "An unexpected error occurred."}), 500
 
 
 if __name__ == '__main__':
